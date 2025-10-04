@@ -1,11 +1,81 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 
 const Signup = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    department: '',
+    password: '',
+    confirmPassword: '',
+    terms: false
+  });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [message, setMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  // const handleChange = (e) => {
+  //   const { name, value, type, checked } = e.target;
+  //   setFormData(prev => ({
+  //     ...prev,
+  //     [name]: type === 'checkbox' ? checked : value
+  //   }));
+  // };
+
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+
+  //   if (formData.password !== formData.confirmPassword) {
+  //     setMessage("Passwords do not match!");
+  //     return;
+  //   }
+
+  //   if (!formData.terms) {
+  //     setMessage("You must accept the Terms & Conditions");
+  //     return;
+  //   }
+
+  //   try {
+  //     const res = await axios.post('http://localhost:5000/api/auth/register', formData);
+  //     setMessage('Signup successful!');
+  //     console.log(res.data); // JWT token & user info
+  //   } catch (err) {
+  //     setMessage(err.response?.data?.message || 'Signup failed!');
+  //   }
+  // };
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/register', formData);
+
+      if (res.data.user) {
+        setMessage('Signup successful!');
+
+        // 1️⃣ Save token and user info in localStorage
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+
+        // 2️⃣ Redirect to login or dashboard after 2 seconds
+        setTimeout(() => {
+          window.location.href = '/login'; // change to '/login' if you want login page
+        }, 2000);
+      }
+    } catch (error) {
+      // 3️⃣ Handle backend errors
+      if (error.response && error.response.data.message) {
+        setMessage(error.response.data.message);
+      } else {
+        setMessage('Something went wrong. Please try again.');
+      }
+    }
   };
 
   return (
@@ -572,62 +642,100 @@ const Signup = () => {
             
             <h2 className="signup-title">Sign up</h2>
             
-            <div className="signup-form">
+            <form className="signup-form" onSubmit={handleSubmit}>
               <div className="form-row">
                 <div className="input-group">
                   <span className="input-icon">👤</span>
-                  <input type="text" placeholder="Full Name" className="input-field" />
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Full Name"
+                    className="input-field"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
-                
+
                 <div className="input-group">
                   <span className="input-icon">📱</span>
-                  <input type="tel" placeholder="Phone Number" className="input-field" />
+                  <input
+                    type="tel"
+                    name="phone"
+                    placeholder="Phone Number"
+                    className="input-field"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
               </div>
-              
+
               <div className="input-group">
                 <span className="input-icon">✉️</span>
-                <input type="email" placeholder="Email Address" className="input-field" />
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email Address"
+                  className="input-field"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
               </div>
 
               <div className="input-group">
                 <span className="input-icon">🏢</span>
-                <select className="input-field">
+                <select
+                  name="department"
+                  className="input-field"
+                  value={formData.department}
+                  onChange={handleChange}
+                  required
+                >
                   <option value="">Select Department</option>
-                  <option value="traffic">Traffic Management</option>
-                  <option value="operations">Emergency Services</option>
-                  <option value="monitoring">Monitoring & Control</option>
-                  <option value="admin">System Administration</option>
-                  <option value="it">IT Support</option>
+                  <option value="Traffic Management">Traffic Management</option>
+                  <option value="Emergency Services">Emergency Services</option>
+                  <option value="Monitoring & Control">Monitoring & Control</option>
+                  <option value="System Administration">System Administration</option>
+                  <option value="IT Support">IT Support</option>
                 </select>
               </div>
-              
+
               <div className="form-row">
                 <div className="input-group">
                   <span className="input-icon">🔒</span>
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="Password" 
-                    className="input-field" 
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    placeholder="Password"
+                    className="input-field"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
                   />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="toggle-password"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? '👁️' : '👁️‍🗨️'}
                   </button>
                 </div>
-                
+
                 <div className="input-group">
                   <span className="input-icon">🔒</span>
-                  <input 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    placeholder="Confirm Password" 
-                    className="input-field" 
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    name="confirmPassword"
+                    placeholder="Confirm Password"
+                    className="input-field"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    required
                   />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="toggle-password"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
@@ -635,18 +743,27 @@ const Signup = () => {
                   </button>
                 </div>
               </div>
-              
+
               <div className="checkbox-group">
-                <input type="checkbox" id="terms" className="checkbox" />
+                <input
+                  type="checkbox"
+                  name="terms"
+                  id="terms"
+                  className="checkbox"
+                  checked={formData.terms}
+                  onChange={handleChange}
+                />
                 <label htmlFor="terms" className="checkbox-label">
                   I agree to the <span className="link">Terms & Conditions</span>
                 </label>
               </div>
-              
-              <button type="submit" className="signup-button" onClick={handleSubmit}>
+
+              <button type="submit" className="signup-button">
                 SIGN UP
               </button>
-            </div>
+
+              {message && <p style={{ color: 'red', marginTop: '10px' }}>{message}</p>}
+            </form>
             
             <div className="divider">
               <span>Or Sign up with social platform</span>
