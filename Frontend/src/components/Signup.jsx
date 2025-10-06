@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import Swal from "sweetalert2";
+import { useNavigate, Link } from 'react-router-dom';
+
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -11,6 +14,7 @@ const Signup = () => {
     confirmPassword: '',
     terms: false
   });
+  const navigate = useNavigate();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -46,37 +50,86 @@ const Signup = () => {
   //   }
   // };
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+const handleChange = (e) => {
+  const { name, value, type, checked } = e.target;
+  setFormData((prev) => ({
+    ...prev,
+    [name]: type === 'checkbox' ? checked : value
+  }));
+};
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    try {
-      const res = await axios.post('http://localhost:5000/api/auth/register', formData);
+  // Passwords must match
+  if (formData.password !== formData.confirmPassword) {
+    Swal.fire({
+      icon: "warning",
+      title: "Passwords do not match!",
+      text: "Please re-enter your password correctly.",
+      confirmButtonColor: "#f39c12",
+    });
+    return;
+  }
 
-      if (res.data.user) {
-        setMessage('Signup successful!');
+  // Terms must be accepted
+  if (!formData.terms) {
+    Swal.fire({
+      icon: "info",
+      title: "Accept Terms & Conditions",
+      text: "You must agree before signing up.",
+      confirmButtonColor: "#3085d6",
+    });
+    return;
+  }
 
-        // 1️⃣ Save token and user info in localStorage
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('user', JSON.stringify(res.data.user));
+  try {
+    const response = await fetch("http://localhost:5000/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        department: formData.department,
+      }),
+    });
 
-        // 2️⃣ Redirect to login or dashboard after 2 seconds
-        setTimeout(() => {
-          window.location.href = '/login'; // change to '/login' if you want login page
-        }, 2000);
-      }
-    } catch (error) {
-      // 3️⃣ Handle backend errors
-      if (error.response && error.response.data.message) {
-        setMessage(error.response.data.message);
-      } else {
-        setMessage('Something went wrong. Please try again.');
-      }
+    const data = await response.json();
+
+    if (response.ok) {
+
+      Swal.fire({
+        icon: "success",
+        title: "Signup Successful 🎉",
+        text: "Welcome aboard! Redirecting to login...",
+        showConfirmButton: false,
+        timer: 2000,
+      });
+
+      setTimeout(() => navigate("/login"), 2000);
+    } else {
+      // Show backend error message
+      Swal.fire({
+        icon: "error",
+        title: "Signup Failed",
+        text: data.message || "Something went wrong. Try again!",
+        confirmButtonColor: "#d33",
+      });
     }
-  };
+  } catch (error) {
+    Swal.fire({
+      icon: "error",
+      title: "Network Error",
+      text: "Unable to connect to the server. Please try again later.",
+      confirmButtonColor: "#d33",
+    });
+  }
+};
+
+
+
 
   return (
     <>
@@ -748,15 +801,15 @@ const Signup = () => {
                 <input
                   type="checkbox"
                   name="terms"
-                  id="terms"
-                  className="checkbox"
                   checked={formData.terms}
                   onChange={handleChange}
+                  className="checkbox"
                 />
                 <label htmlFor="terms" className="checkbox-label">
-                  I agree to the <span className="link">Terms & Conditions</span>
+                  I agree to the <a href="/terms" className="link">Terms & Conditions</a>
                 </label>
               </div>
+
 
               <button type="submit" className="signup-button">
                 SIGN UP
@@ -780,7 +833,10 @@ const Signup = () => {
             </button>
 
             <div className="signin-link">
-              Already have an account? <span className="link">Sign In here</span>
+              Already have an account?{' '}
+              <Link to="/login" className="link">
+                Sign In here
+              </Link>
             </div>
           </div>
         </div>

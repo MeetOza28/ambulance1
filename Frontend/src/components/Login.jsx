@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import '../styles/Login.css';
+import Swal from 'sweetalert2';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -7,13 +9,64 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Login attempt:', { email, password });
-  };
+  const navigate = useNavigate();
 
   const togglePassword = () => {
     setShowPassword((prev) => !prev);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!email || !password) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Missing Fields',
+        text: 'Please enter both email and password.',
+        confirmButtonColor: '#f39c12',
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Save token
+        if (rememberMe) localStorage.setItem('token', data.token);
+        else sessionStorage.setItem('token', data.token);
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Login Successful 🎉',
+          text: `Welcome back, ${data.user.name}! Redirecting...`,
+          showConfirmButton: false,
+          timer: 2000,
+        });
+
+        setTimeout(() => navigate('/'), 2000);
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Login Failed',
+          text: data.message || 'Invalid email or password',
+          confirmButtonColor: '#d33',
+        });
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Network Error',
+        text: 'Unable to connect to the server. Try again later.',
+        confirmButtonColor: '#d33',
+      });
+    }
   };
 
   return (
@@ -119,7 +172,7 @@ const Login = () => {
                 <span className="field-icon">👤</span>
                 <input
                   type="email"
-                  placeholder="Username"
+                  placeholder="Email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

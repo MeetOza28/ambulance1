@@ -1,16 +1,99 @@
 import React, {useState, useEffect} from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import '../styles/Dashboard.css';
 
 const Dashboard = () => {
     const navigate = useNavigate();
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
     useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+  const checkToken = () => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Session Expired',
+        text: 'You have been logged out!',
+        confirmButtonColor: '#3085d6',
+      });
+      navigate('/login', { replace: true });
+    }
+  };
+
+  // Check token immediately and every second
+  checkToken();
+  const interval = setInterval(checkToken, 1000);
+
+  // Cleanup on unmount
+  return () => clearInterval(interval);
+}, [navigate]);
+
+  // 👤 Fetch user profile using stored token
+  useEffect(() => {
+    const fetchUser = async () => {
+      const token =
+        localStorage.getItem('token') || sessionStorage.getItem('token');
+
+      if (!token) {
+        Swal.fire({
+          icon: 'info',
+          title: 'Session Expired',
+          text: 'Please log in again.',
+          confirmButtonColor: '#3085d6',
+        });
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      try {
+        const response = await fetch('http://localhost:5000/api/auth/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data);
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `Welcome back, ${data.name}! 🎉`,
+            showConfirmButton: false,
+            timer: 2000,
+          });
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch user data');
+        }
+      } catch (error) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Authentication Failed',
+          text: 'Your session has expired. Please log in again.',
+        });
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
+        navigate('/login', { replace: true });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [navigate]);
+
+  
   return (
     <div className="dashboard-container">
       {/* Sidebar */}
