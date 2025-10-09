@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
@@ -43,13 +44,13 @@ connectDB();
 /* Routes */
 import authRoutes from "./routes/authRoutes.js";
 // import ambulanceRoutes from "./routes/ambulanceRoutes.js";
-// import signalRoutes from "./routes/signalRoutes.js";
+import signalRoutes from "./routes/signalRoutes.js";
 // import violationRoutes from "./routes/violationRoutes.js";
 // import challanRoutes from "./routes/challanRoutes.js";
 
 app.use("/api/auth", authRoutes);
 // app.use("/api/ambulance", ambulanceRoutes);
-// app.use("/api/signal", signalRoutes);
+app.use("/api/signal", signalRoutes);
 // app.use("/api/violation", violationRoutes);
 // app.use("/api/challan", challanRoutes);
 

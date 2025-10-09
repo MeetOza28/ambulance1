@@ -216,7 +216,7 @@ const Login = () => {
             <div className="login-footer">
               <p>
                 Don't have an account?{" "}
-                <a href="/signup" className="signup-link">Sign Up here</a>
+                <a href="/Signup" className="signup-link">Sign Up here</a>
               </p>
             </div>
 

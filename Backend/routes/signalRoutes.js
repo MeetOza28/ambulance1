@@ -1,11 +1,40 @@
-// import express from "express";
-// import { getSignal, updateSignalStatus, listSignals } from "../controllers/signalController.js";
-// import { protect } from "../middlewares/authMiddleware.js";
+import express from "express";
+import {
+  listSignals,
+  getSignal,
+  updateSignalStatus,
+  syncSignals,
+  updateTimer,
+  resetSignalTimer,
+  updateSchedule,
+  generateReport,
+  emergencyOverride,
+  updateSignalByAmbulance,
+    addSignal,
+    deleteSignal,
+    bulkUpdateSignals,
+    bulkResetTimers,
+    filterByStatus,
+    filterByFlow
+} from "../controllers/signalController.js";
 
-// const router = express.Router();
+const router = express.Router();
 
-// router.get("/", protect, listSignals);
-// router.get("/:id", protect, getSignal);
-// router.put("/update/:id", protect, updateSignalStatus);
+router.get("/", listSignals);
+router.post("/add", addSignal);
+router.delete("/:id", deleteSignal);
+router.get("/report", generateReport);
+router.get("/:id", getSignal);
+router.put("/:id/status", updateSignalStatus);
+router.put("/:id/timer", updateTimer);
+router.post("/bulk/update", bulkUpdateSignals);
+router.post("/bulk/reset", bulkResetTimers);
+router.get("/status/:status", filterByStatus); // Active / Offline / Maintenance
+router.get("/flow/:level", filterByFlow);     // Low / Medium / High
+router.post("/sync", syncSignals);
+router.put("/schedule", updateSchedule);
+router.post("/:id/reset", resetSignalTimer);
+router.post("/:id/override", emergencyOverride);
+router.post("/update/:ambulanceId", updateSignalByAmbulance);
 
-// export default router;
+export default router;
