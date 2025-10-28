@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import axios from 'axios';
+import Swal from "sweetalert2";
+import { useNavigate, Link } from 'react-router-dom';
+
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -11,55 +14,122 @@ const Signup = () => {
     confirmPassword: '',
     terms: false
   });
+  const navigate = useNavigate();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [message, setMessage] = useState('');
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
+  // const handleChange = (e) => {
+  //   const { name, value, type, checked } = e.target;
+  //   setFormData(prev => ({
+  //     ...prev,
+  //     [name]: type === 'checkbox' ? checked : value
+  //   }));
+  // };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
 
-    if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match!");
-      return;
-    }
+  //   if (formData.password !== formData.confirmPassword) {
+  //     setMessage("Passwords do not match!");
+  //     return;
+  //   }
 
-    if (!formData.terms) {
-      alert("You must agree to terms before signing up.");
-      return;
-    }
+  //   if (!formData.terms) {
+  //     setMessage("You must accept the Terms & Conditions");
+  //     return;
+  //   }
 
-    try {
-      const response = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          phone: formData.phone,
-          department: formData.department,
-        }),
+  //   try {
+  //     const res = await axios.post('http://localhost:5000/api/auth/register', formData);
+  //     setMessage('Signup successful!');
+  //     console.log(res.data); // JWT token & user info
+  //   } catch (err) {
+  //     setMessage(err.response?.data?.message || 'Signup failed!');
+  //   }
+  // };
+
+const handleChange = (e) => {
+  const { name, value, type, checked } = e.target;
+  setFormData((prev) => ({
+    ...prev,
+    [name]: type === 'checkbox' ? checked : value
+  }));
+};
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  // Passwords must match
+  if (formData.password !== formData.confirmPassword) {
+    Swal.fire({
+      icon: "warning",
+      title: "Passwords do not match!",
+      text: "Please re-enter your password correctly.",
+      confirmButtonColor: "#f39c12",
+    });
+    return;
+  }
+
+  // Terms must be accepted
+  if (!formData.terms) {
+    Swal.fire({
+      icon: "info",
+      title: "Accept Terms & Conditions",
+      text: "You must agree before signing up.",
+      confirmButtonColor: "#3085d6",
+    });
+    return;
+  }
+
+  try {
+    const response = await fetch("http://localhost:5000/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        department: formData.department,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+
+      Swal.fire({
+        icon: "success",
+        title: "Signup Successful 🎉",
+        text: "Welcome aboard! Redirecting to login...",
+        showConfirmButton: false,
+        timer: 2000,
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        alert("Signup Successful! Redirecting to login...");
-      } else {
-        alert(data.message || "Signup failed. Try again!");
-      }
-    } catch (error) {
-      alert("Network Error. Unable to connect to server.");
+      setTimeout(() => navigate("/login"), 2000);
+    } else {
+      // Show backend error message
+      Swal.fire({
+        icon: "error",
+        title: "Signup Failed",
+        text: data.message || "Something went wrong. Try again!",
+        confirmButtonColor: "#d33",
+      });
     }
-  };
+  } catch (error) {
+    Swal.fire({
+      icon: "error",
+      title: "Network Error",
+      text: "Unable to connect to the server. Please try again later.",
+      confirmButtonColor: "#d33",
+    });
+  }
+};
+
+
+
 
   return (
     <>
@@ -72,16 +142,15 @@ const Signup = () => {
 
         body {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          overflow: hidden;
         }
 
         .signup-container {
           display: flex;
           justify-content: center;
           align-items: center;
-          height: 100vh;
+          min-height: 100vh;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          padding: 15px;
+          padding: 20px;
           position: relative;
           overflow: hidden;
         }
@@ -139,21 +208,20 @@ const Signup = () => {
 
         .signup-card {
           background: white;
-          border-radius: 24px;
+          border-radius: 28px;
           width: 100%;
-          max-width: 1000px;
-          max-height: 95vh;
+          max-width: 1100px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
           z-index: 2;
           position: relative;
           display: grid;
-          grid-template-columns: 380px 1fr;
+          grid-template-columns: 420px 1fr;
           overflow: hidden;
         }
 
         .card-left {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          padding: 25px 20px;
+          padding: 38px 32px;
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -163,26 +231,26 @@ const Signup = () => {
         }
 
         .hero-title {
-          font-size: 24px;
+          font-size: 30px;
           font-weight: 700;
-          margin-bottom: 8px;
+          margin-bottom: 14px;
           text-align: center;
-          line-height: 1.2;
+          line-height: 1.3;
         }
 
         .hero-subtitle {
-          font-size: 12px;
+          font-size: 14px;
           text-align: center;
           opacity: 0.95;
-          margin-bottom: 20px;
-          line-height: 1.4;
+          margin-bottom: 28px;
+          line-height: 1.5;
         }
 
         .mini-skyline {
           width: 100%;
-          height: 100px;
+          height: 140px;
           position: relative;
-          margin-bottom: 20px;
+          margin-bottom: 28px;
         }
 
         .building {
@@ -193,27 +261,51 @@ const Signup = () => {
           backdrop-filter: blur(10px);
         }
 
-        .building1 { left: 15%; width: 45px; height: 75px; }
-        .building2 { left: 30%; width: 38px; height: 55px; }
-        .building3 { left: 45%; width: 50px; height: 85px; }
-        .building4 { right: 30%; width: 42px; height: 65px; }
-        .building5 { right: 15%; width: 48px; height: 78px; }
+        .building1 {
+          left: 15%;
+          width: 52px;
+          height: 95px;
+        }
+
+        .building2 {
+          left: 30%;
+          width: 44px;
+          height: 70px;
+        }
+
+        .building3 {
+          left: 45%;
+          width: 58px;
+          height: 110px;
+        }
+
+        .building4 {
+          right: 30%;
+          width: 48px;
+          height: 82px;
+        }
+
+        .building5 {
+          right: 15%;
+          width: 55px;
+          height: 100px;
+        }
 
         .window {
           position: absolute;
-          width: 5px;
-          height: 6px;
+          width: 6px;
+          height: 8px;
           background: rgba(255, 255, 255, 0.3);
           border-radius: 1px;
         }
 
         .moving-car {
           position: absolute;
-          bottom: 5px;
-          width: 24px;
-          height: 15px;
+          bottom: 8px;
+          width: 28px;
+          height: 18px;
           background: #3498db;
-          border-radius: 3px;
+          border-radius: 4px;
           animation: driveAcross 6s linear infinite;
         }
 
@@ -225,7 +317,7 @@ const Signup = () => {
         .stats-mini {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
+          gap: 12px;
           width: 100%;
         }
 
@@ -233,8 +325,8 @@ const Signup = () => {
           background: rgba(255, 255, 255, 0.15);
           backdrop-filter: blur(10px);
           border: 1px solid rgba(255, 255, 255, 0.25);
-          border-radius: 10px;
-          padding: 12px 8px;
+          border-radius: 12px;
+          padding: 18px 12px;
           text-align: center;
           transition: transform 0.3s;
         }
@@ -243,55 +335,52 @@ const Signup = () => {
           transform: translateY(-3px);
         }
 
-        .stat-icon { font-size: 20px; margin-bottom: 5px; }
-        .stat-number { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
-        .stat-label { font-size: 10px; opacity: 0.9; }
+        .stat-icon {
+          font-size: 26px;
+          margin-bottom: 8px;
+        }
+
+        .stat-number {
+          font-size: 20px;
+          font-weight: 700;
+          margin-bottom: 3px;
+        }
+
+        .stat-label {
+          font-size: 12px;
+          opacity: 0.9;
+        }
 
         .card-right {
-          padding: 20px 30px 15px;
+          padding: 38px 42px;
           display: flex;
           flex-direction: column;
-          overflow-y: auto;
-        }
-        
-        .card-right::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        .card-right::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
-        }
-        
-        .card-right::-webkit-scrollbar-thumb {
-          background: #667eea;
-          border-radius: 10px;
         }
 
         .signup-header {
           text-align: center;
-          margin-bottom: 12px;
+          margin-bottom: 18px;
         }
 
         .brand-name {
-          font-size: 24px;
+          font-size: 30px;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
-          margin-bottom: 2px;
+          margin-bottom: 4px;
           font-weight: 700;
         }
 
         .brand-subtitle {
           color: #95a5a6;
-          font-size: 11px;
+          font-size: 12px;
         }
 
         .signup-title {
-          font-size: 19px;
+          font-size: 26px;
           color: #2c3e50;
-          margin-bottom: 10px;
+          margin-bottom: 20px;
           font-weight: 700;
           text-align: center;
         }
@@ -299,13 +388,13 @@ const Signup = () => {
         .signup-form {
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 13px;
         }
 
         .form-row {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 8px;
+          gap: 13px;
         }
 
         .input-group {
@@ -313,8 +402,8 @@ const Signup = () => {
           display: flex;
           align-items: center;
           background: #f8f9fa;
-          border-radius: 8px;
-          padding: 8px 12px;
+          border-radius: 10px;
+          padding: 12px 14px;
           transition: all 0.3s ease;
         }
 
@@ -324,8 +413,8 @@ const Signup = () => {
         }
 
         .input-icon {
-          font-size: 14px;
-          margin-right: 8px;
+          font-size: 16px;
+          margin-right: 10px;
           color: #7f8c8d;
         }
 
@@ -334,46 +423,50 @@ const Signup = () => {
           border: none;
           background: transparent;
           outline: none;
-          font-size: 13px;
+          font-size: 14px;
           color: #2c3e50;
         }
 
         .input-field::placeholder {
           color: #95a5a6;
-          font-size: 13px;
+          font-size: 14px;
         }
 
-        select.input-field { cursor: pointer; }
+        select.input-field {
+          cursor: pointer;
+        }
 
         .toggle-password {
           background: none;
           border: none;
           cursor: pointer;
-          font-size: 14px;
+          font-size: 16px;
           padding: 0;
-          margin-left: 6px;
+          margin-left: 8px;
           opacity: 0.6;
           transition: opacity 0.3s;
         }
 
-        .toggle-password:hover { opacity: 1; }
+        .toggle-password:hover {
+          opacity: 1;
+        }
 
         .checkbox-group {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 7px;
           margin-top: 2px;
         }
 
         .checkbox {
-          width: 14px;
-          height: 14px;
+          width: 15px;
+          height: 15px;
           cursor: pointer;
           accent-color: #667eea;
         }
 
         .checkbox-label {
-          font-size: 11px;
+          font-size: 12px;
           color: #7f8c8d;
           cursor: pointer;
         }
@@ -395,13 +488,13 @@ const Signup = () => {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border: none;
-          border-radius: 8px;
-          padding: 10px;
-          font-size: 13px;
+          border-radius: 10px;
+          padding: 13px;
+          font-size: 14px;
           font-weight: 600;
           letter-spacing: 0.5px;
           cursor: pointer;
-          margin-top: 4px;
+          margin-top: 8px;
           transition: transform 0.2s, box-shadow 0.2s;
           box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
@@ -411,14 +504,16 @@ const Signup = () => {
           box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
         }
 
-        .signup-button:active { transform: translateY(0); }
+        .signup-button:active {
+          transform: translateY(0);
+        }
 
         .divider {
           text-align: center;
-          margin: 8px 0 6px;
+          margin: 15px 0 13px;
           position: relative;
           color: #95a5a6;
-          font-size: 10px;
+          font-size: 11px;
         }
 
         .divider::before,
@@ -431,8 +526,14 @@ const Signup = () => {
           background: #e0e0e0;
         }
 
-        .divider::before { left: 0; }
-        .divider::after { right: 0; }
+        .divider::before {
+          left: 0;
+        }
+
+        .divider::after {
+          right: 0;
+        }
+
         .divider span {
           background: white;
           padding: 0 8px;
@@ -444,13 +545,13 @@ const Signup = () => {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          gap: 10px;
           width: 100%;
-          padding: 9px;
+          padding: 11px;
           background: white;
           border: 2px solid #e0e0e0;
-          border-radius: 8px;
-          font-size: 12px;
+          border-radius: 10px;
+          font-size: 13px;
           font-weight: 600;
           color: #2c3e50;
           cursor: pointer;
@@ -464,70 +565,41 @@ const Signup = () => {
         }
 
         .google-icon {
-          width: 16px;
-          height: 16px;
+          width: 18px;
+          height: 18px;
         }
 
         .signin-link {
           text-align: center;
-          font-size: 11px;
+          font-size: 12px;
           color: #7f8c8d;
-          margin-top: 8px;
+          margin-top: 13px;
         }
 
         @media (max-width: 900px) {
           .signup-card {
             grid-template-columns: 1fr;
-            max-width: 400px;
+            max-width: 440px;
           }
+
           .card-left {
-            padding: 20px 15px;
+            padding: 24px 20px;
           }
+
           .hero-title {
-            font-size: 20px;
+            font-size: 22px;
           }
+
           .mini-skyline {
-            height: 70px;
+            height: 90px;
           }
+
           .card-right {
-            padding: 20px 25px;
+            padding: 28px 30px;
           }
+
           .form-row {
             grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-height: 700px) {
-          .card-left {
-            padding: 15px;
-          }
-          .hero-title {
-            font-size: 20px;
-            margin-bottom: 5px;
-          }
-          .hero-subtitle {
-            font-size: 11px;
-            margin-bottom: 12px;
-          }
-          .mini-skyline {
-            height: 70px;
-            margin-bottom: 12px;
-          }
-          .stats-mini {
-            gap: 8px;
-          }
-          .stat-mini {
-            padding: 8px 6px;
-          }
-          .card-right {
-            padding: 20px 25px;
-          }
-          .signup-header {
-            margin-bottom: 8px;
-          }
-          .signup-title {
-            margin-bottom: 8px;
-            font-size: 18px;
           }
         }
       `}</style>
@@ -548,74 +620,81 @@ const Signup = () => {
 
             <div className="mini-skyline">
               <div className="building building1">
-                <div className="window" style={{ top: '12px', left: '10px' }}></div>
-                <div className="window" style={{ top: '12px', right: '10px' }}></div>
-                <div className="window" style={{ top: '24px', left: '10px' }}></div>
-                <div className="window" style={{ top: '24px', right: '10px' }}></div>
-                <div className="window" style={{ top: '36px', left: '10px' }}></div>
-                <div className="window" style={{ top: '36px', right: '10px' }}></div>
+                <div className="window" style={{top: '14px', left: '12px'}}></div>
+                <div className="window" style={{top: '14px', right: '12px'}}></div>
+                <div className="window" style={{top: '30px', left: '12px'}}></div>
+                <div className="window" style={{top: '30px', right: '12px'}}></div>
+                <div className="window" style={{top: '46px', left: '12px'}}></div>
+                <div className="window" style={{top: '46px', right: '12px'}}></div>
+                <div className="window" style={{top: '62px', left: '12px'}}></div>
+                <div className="window" style={{top: '62px', right: '12px'}}></div>
               </div>
-
               <div className="building building2">
-                <div className="window" style={{ top: '10px', left: '8px' }}></div>
-                <div className="window" style={{ top: '10px', right: '8px' }}></div>
-                <div className="window" style={{ top: '22px', left: '8px' }}></div>
-                <div className="window" style={{ top: '22px', right: '8px' }}></div>
+                <div className="window" style={{top: '12px', left: '10px'}}></div>
+                <div className="window" style={{top: '12px', right: '10px'}}></div>
+                <div className="window" style={{top: '28px', left: '10px'}}></div>
+                <div className="window" style={{top: '28px', right: '10px'}}></div>
+                <div className="window" style={{top: '44px', left: '10px'}}></div>
+                <div className="window" style={{top: '44px', right: '10px'}}></div>
               </div>
-
               <div className="building building3">
-                <div className="window" style={{ top: '14px', left: '10px' }}></div>
-                <div className="window" style={{ top: '14px', right: '10px' }}></div>
-                <div className="window" style={{ top: '28px', left: '10px' }}></div>
-                <div className="window" style={{ top: '28px', right: '10px' }}></div>
-                <div className="window" style={{ top: '42px', left: '10px' }}></div>
-                <div className="window" style={{ top: '42px', right: '10px' }}></div>
+                <div className="window" style={{top: '16px', left: '12px'}}></div>
+                <div className="window" style={{top: '16px', right: '12px'}}></div>
+                <div className="window" style={{top: '36px', left: '12px'}}></div>
+                <div className="window" style={{top: '36px', right: '12px'}}></div>
+                <div className="window" style={{top: '56px', left: '12px'}}></div>
+                <div className="window" style={{top: '56px', right: '12px'}}></div>
+                <div className="window" style={{top: '76px', left: '12px'}}></div>
+                <div className="window" style={{top: '76px', right: '12px'}}></div>
               </div>
-
               <div className="building building4">
-                <div className="window" style={{ top: '12px', left: '9px' }}></div>
-                <div className="window" style={{ top: '12px', right: '9px' }}></div>
-                <div className="window" style={{ top: '26px', left: '9px' }}></div>
-                <div className="window" style={{ top: '26px', right: '9px' }}></div>
+                <div className="window" style={{top: '14px', left: '11px'}}></div>
+                <div className="window" style={{top: '14px', right: '11px'}}></div>
+                <div className="window" style={{top: '32px', left: '11px'}}></div>
+                <div className="window" style={{top: '32px', right: '11px'}}></div>
+                <div className="window" style={{top: '50px', left: '11px'}}></div>
+                <div className="window" style={{top: '50px', right: '11px'}}></div>
               </div>
-
               <div className="building building5">
-                <div className="window" style={{ top: '14px', left: '10px' }}></div>
-                <div className="window" style={{ top: '14px', right: '10px' }}></div>
-                <div className="window" style={{ top: '30px', left: '10px' }}></div>
-                <div className="window" style={{ top: '30px', right: '10px' }}></div>
+                <div className="window" style={{top: '16px', left: '12px'}}></div>
+                <div className="window" style={{top: '16px', right: '12px'}}></div>
+                <div className="window" style={{top: '36px', left: '12px'}}></div>
+                <div className="window" style={{top: '36px', right: '12px'}}></div>
+                <div className="window" style={{top: '56px', left: '12px'}}></div>
+                <div className="window" style={{top: '56px', right: '12px'}}></div>
+                <div className="window" style={{top: '76px', left: '12px'}}></div>
+                <div className="window" style={{top: '76px', right: '12px'}}></div>
               </div>
-
               <div className="moving-car"></div>
             </div>
 
             <div className="stats-mini">
               <div className="stat-mini">
                 <div className="stat-icon">🚦</div>
-                <div className="stat-number">+150</div>
-                <div className="stat-label">Smart Signals</div>
+                <div className="stat-number">500+</div>
+                <div className="stat-label">Signals</div>
               </div>
               <div className="stat-mini">
-                <div className="stat-icon">🚑</div>
-                <div className="stat-number">1.2k</div>
-                <div className="stat-label">Ambulances Tracked</div>
+                <div className="stat-icon">👥</div>
+                <div className="stat-number">50K+</div>
+                <div className="stat-label">Users</div>
               </div>
               <div className="stat-mini">
                 <div className="stat-icon">🏙️</div>
-                <div className="stat-number">2.5k</div>
-                <div className="stat-label">Helmet Violations</div>
+                <div className="stat-number">25+</div>
+                <div className="stat-label">Cities</div>
               </div>
             </div>
           </div>
 
           <div className="card-right">
             <div className="signup-header">
-              <h2 className="brand-name">SurakshaPath</h2>
-              <p className="brand-subtitle">Smart Safety Infrastructure</p>
+              <h1 className="brand-name">SurakshaPath</h1>
+              <p className="brand-subtitle">Traffic Management System</p>
             </div>
-
-            <h3 className="signup-title">Create Your Account</h3>
-
+            
+            <h2 className="signup-title">Sign up</h2>
+            
             <form className="signup-form" onSubmit={handleSubmit}>
               <div className="form-row">
                 <div className="input-group">
@@ -623,37 +702,37 @@ const Signup = () => {
                   <input
                     type="text"
                     name="name"
-                    value={formData.name}
-                    onChange={handleChange}
                     placeholder="Full Name"
                     className="input-field"
+                    value={formData.name}
+                    onChange={handleChange}
                     required
                   />
                 </div>
 
                 <div className="input-group">
-                  <span className="input-icon">📞</span>
+                  <span className="input-icon">📱</span>
                   <input
                     type="tel"
                     name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
                     placeholder="Phone Number"
                     className="input-field"
+                    value={formData.phone}
+                    onChange={handleChange}
                     required
                   />
                 </div>
               </div>
 
               <div className="input-group">
-                <span className="input-icon">📧</span>
+                <span className="input-icon">✉️</span>
                 <input
                   type="email"
                   name="email"
-                  value={formData.email}
-                  onChange={handleChange}
                   placeholder="Email Address"
                   className="input-field"
+                  value={formData.email}
+                  onChange={handleChange}
                   required
                 />
               </div>
@@ -662,17 +741,17 @@ const Signup = () => {
                 <span className="input-icon">🏢</span>
                 <select
                   name="department"
+                  className="input-field"
                   value={formData.department}
                   onChange={handleChange}
-                  className="input-field"
                   required
                 >
                   <option value="">Select Department</option>
-                  <option value="Computer Engineering">Computer Engineering</option>
-                  <option value="Information Technology">Information Technology</option>
-                  <option value="Electronics & Communication">Electronics & Communication</option>
-                  <option value="Electrical Engineering">Electrical Engineering</option>
-                  <option value="Mechanical Engineering">Mechanical Engineering</option>
+                  <option value="Traffic Management">Traffic Management</option>
+                  <option value="Emergency Services">Emergency Services</option>
+                  <option value="Monitoring & Control">Monitoring & Control</option>
+                  <option value="System Administration">System Administration</option>
+                  <option value="IT Support">IT Support</option>
                 </select>
               </div>
 
@@ -682,10 +761,10 @@ const Signup = () => {
                   <input
                     type={showPassword ? "text" : "password"}
                     name="password"
-                    value={formData.password}
-                    onChange={handleChange}
                     placeholder="Password"
                     className="input-field"
+                    value={formData.password}
+                    onChange={handleChange}
                     required
                   />
                   <button
@@ -693,7 +772,7 @@ const Signup = () => {
                     className="toggle-password"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? "🙈" : "👁️"}
+                    {showPassword ? '👁️' : '👁️‍🗨️'}
                   </button>
                 </div>
 
@@ -702,10 +781,10 @@ const Signup = () => {
                   <input
                     type={showConfirmPassword ? "text" : "password"}
                     name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
                     placeholder="Confirm Password"
                     className="input-field"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
                     required
                   />
                   <button
@@ -713,7 +792,7 @@ const Signup = () => {
                     className="toggle-password"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
-                    {showConfirmPassword ? "🙈" : "👁️"}
+                    {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
                   </button>
                 </div>
               </div>
@@ -727,38 +806,38 @@ const Signup = () => {
                   className="checkbox"
                 />
                 <label htmlFor="terms" className="checkbox-label">
-                  I agree to the <span className="link">Terms & Conditions</span>
+                  I agree to the <a href="/terms" className="link">Terms & Conditions</a>
                 </label>
               </div>
 
+
               <button type="submit" className="signup-button">
-                Sign Up
+                SIGN UP
               </button>
 
-              <div className="divider">
-                <span>or</span>
-              </div>
-
-              <button
-                type="button"
-                className="google-button"
-                onClick={() => alert("Google Sign-In Coming Soon!")}
-              >
-                <img
-                  src="https://developers.google.com/identity/images/g-logo.png"
-                  alt="Google Logo"
-                  className="google-icon"
-                />
-                Sign up with Google
-              </button>
-
-              <div className="signin-link">
-                Already have an account?{' '}
-                <Link to="/login" className="link">
-                  Sign In here
-                </Link>
-              </div>
+              {message && <p style={{ color: 'red', marginTop: '10px' }}>{message}</p>}
             </form>
+            
+            <div className="divider">
+              <span>Or Sign up with social platform</span>
+            </div>
+            
+            <button className="google-button">
+              <svg className="google-icon" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Sign up with Google
+            </button>
+
+            <div className="signin-link">
+              Already have an account?{' '}
+              <Link to="/login" className="link">
+                Sign In here
+              </Link>
+            </div>
           </div>
         </div>
       </div>

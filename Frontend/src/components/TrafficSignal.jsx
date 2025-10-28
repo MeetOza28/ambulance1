@@ -42,7 +42,7 @@ const TrafficSignals = () => {
   useEffect(() => {
   const fetchSignals = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/signal");
+      const response = await fetch("http://localhost:5001/api/signal");
       if (!response.ok) throw new Error("Failed to fetch signals");
       const data = await response.json();
 
@@ -85,7 +85,7 @@ const TrafficSignals = () => {
   useEffect(() => {
     const syncInterval = setInterval(async () => {
       try {
-        await axios.post("http://localhost:5000/api/signal/sync", { signals });
+        await axios.post("http://localhost:5001/api/signal/sync", { signals });
         setIsOnline(true);
         setLastSync(new Date().toLocaleTimeString());
         console.log("✅ Signals synced successfully");
@@ -101,7 +101,7 @@ const TrafficSignals = () => {
   // Manual Sync button
   const handleManualSync = async () => {
     try {
-      await axios.post("http://localhost:5000/api/signal/sync", { signals });
+      await axios.post("http://localhost:5001/api/signal/sync", { signals });
       setLastSync(new Date().toLocaleTimeString());
       setIsOnline(true);
     } catch (err) {
@@ -412,7 +412,7 @@ useEffect(() => {
     }));
 
     await Promise.all(updates.map(u => 
-      axios.put(`http://localhost:5000/api/signal/${u.id}/timer`, u)
+      axios.put(`http://localhost:5001/api/signal/${u.id}/timer`, u)
     ));
 
     // Optional: single log

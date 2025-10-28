@@ -15,5 +15,8 @@
     "url": "https://github.com/MeetOza28/ambulance1/issues"
   },
   "homepage": "https://github.com/MeetOza28/ambulance1#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "mongodb": "^6.20.0"
+  }
 }
