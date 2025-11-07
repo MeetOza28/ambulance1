@@ -12,7 +12,7 @@ const ResetPassword = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`http://localhost:5000/api/auth/reset-password/${id}/${token}`, { password });
+      const res = await axios.post(`http://localhost:5001/api/auth/reset-password/${id}/${token}`, { password });
       
       Swal.fire({
         icon: 'success',

@@ -22,6 +22,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import '../styles/ChallanHistory.css';
+import Swal from 'sweetalert2';
 
 const ChallanHistory = () => {
   const navigate = useNavigate();
@@ -161,6 +162,63 @@ const ChallanHistory = () => {
   const overdueChallans = challanData.filter(c => c.status === 'Overdue').length;
   const totalRevenue = challanData.filter(c => c.status === 'Paid').reduce((sum, c) => sum + c.fineAmount, 0);
 
+    // ------------------- Logout handler -------------------
+      const handleLogout = async () => {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  
+        // If no token, just clear storage and redirect
+        if (!token) {
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+          navigate('/login', { replace: true });
+          return;
+        }
+  
+        try {
+          // Call the logout route (protected) to blacklist the token on server
+          const response = await fetch('http://localhost:5001/api/auth/logout', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+  
+          // We don't need to strictly check response.ok — even if token expired,
+          // we will remove it client-side to guarantee logout.
+          // But we can show server message if needed.
+          const resData = await response.json().catch(() => ({}));
+  
+          // Clear storage
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+  
+          Swal.fire({
+            icon: 'success',
+            title: 'Logged out',
+            text: resData?.message || 'You have been logged out successfully.',
+            confirmButtonColor: '#3085d6',
+          });
+  
+          navigate('/login', { replace: true });
+        } catch (err) {
+          // If the logout API call fails (network), still remove tokens client-side.
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+  
+          Swal.fire({
+            icon: 'warning',
+            title: 'Logged out locally',
+            text: 'Could not contact server but you are logged out locally.',
+            confirmButtonColor: '#3085d6',
+          });
+  
+          navigate('/login', { replace: true });
+        }
+      };
+  
+  
+
   return (
     <div className="challan-history-page">
       {/* Sidebar */}
@@ -202,6 +260,14 @@ const ChallanHistory = () => {
             <p>Last Updated</p>
             <p className="update-time">{currentTime.toLocaleTimeString()}</p>
           </div>
+              {/* Logout button */}
+       
+<div className="logout-container">
+  <button onClick={handleLogout} className="logout-button">
+    <span className="logout-icon">🔒</span>
+    Logout
+  </button>
+</div>
         </div>
       </div>
 
