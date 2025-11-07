@@ -57,6 +57,27 @@ app.use("/api/signal", signalRoutes);
 // Test Route
 app.get("/", (req, res) => res.send("API is running"));
 
+// ✅ Reverse Geocoding Proxy Route
+app.get("/api/reverse-geocode", async (req, res) => {
+  const { lat, lon } = req.query;
+
+  try {
+    const response = await axios.get(
+      `https://nominatim.openstreetmap.org/reverse`,
+      {
+        params: { format: "json", lat, lon },
+        headers: {
+          "User-Agent": "SurakshaPathApp/1.0 (surakshapath@example.com)",
+        },
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error("Reverse geocoding error:", error.message);
+    res.status(500).json({ message: "Failed to reverse geocode" });
+  }
+});
+
 /* Health */
 // app.get("/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
 
@@ -65,5 +86,5 @@ app.use(notFound);
 app.use(errorHandler);
 
 /* Start */
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -1,0 +1,56 @@
+{
+  "Ambulances": {
+    "AMB001": {
+      "driverName": "Meet Oza",
+      "contactNumber": "9429929250",
+      "status": "En Route",
+      "caseId": "Case #1",
+      "Latitude": "21.181603",
+      "Longitude": "72.808381",
+      "Location": {
+        "lat": "21.181603",
+        "lng": "72.808381"
+      },
+      "lastUpdated": "2025-10-28T18:45:00Z"
+    },
+    "AMB002": {
+      "driverName": "Fenil Patel",
+      "contactNumber": "9876543210",
+      "status": "Emergency",
+      "caseId": "Case #2",
+      "Latitude": "21.204956",
+      "Longitude": "72.840870",
+      "Location": {
+        "lat": "21.204956",
+        "lng": "72.840870"
+      },
+      "lastUpdated": "2025-10-28T18:45:05Z"
+    },
+    "AMB003": {
+      "driverName": "Ritu Vamja",
+      "contactNumber": "9988776655",
+      "status": "Available",
+      "caseId": "Case #3",
+      "Latitude": "21.156948",
+      "Longitude": "72.793295",
+      "Location": {
+        "lat": "21.156948",
+        "lng": "72.793295"
+      },
+      "lastUpdated": "2025-10-28T18:45:10Z"
+    },
+    "AMB004": {
+      "driverName": "Roshan Vaghasiya",
+      "contactNumber": "9512345678",
+      "status": "Returning",
+      "caseId": "Case #4",
+      "Latitude": "21.230500",
+      "Longitude": "72.876120",
+      "Location": {
+        "lat": "21.230500",
+        "lng": "72.876120"
+      },
+      "lastUpdated": "2025-10-28T18:45:15Z"
+    }
+  }
+}

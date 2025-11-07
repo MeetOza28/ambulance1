@@ -22,8 +22,10 @@ const ambulanceSchema = new mongoose.Schema({
   caseId: {
   type: String,
   default: null,
-  unique: true, // unique identifier for each emergency case/patient
+  index: true,
+  sparse: true,  // allows multiple documents with null caseId
 },
+
 patient: {
   type: String,
   default: null, // patient name can be repeated, uniqueness is enforced on caseId
@@ -62,5 +64,21 @@ patient: {
     default: Date.now,
   },
 });
+
+ambulanceSchema.pre("save", function (next) {
+  if (this.status === "Available") {
+    this.caseId = null;
+  }
+  next();
+});
+
+ambulanceSchema.pre("findOneAndUpdate", function (next) {
+  const update = this.getUpdate();
+  if (update.status === "Available") {
+    update.caseId = null;
+  }
+  next();
+});
+
 
 export default mongoose.model("Ambulance", ambulanceSchema);
