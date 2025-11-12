@@ -31,6 +31,41 @@ export const getSignal = asyncHandler(async (req, res) => {
   res.json(signal);
 });
 
+// controllers/signalController.js
+// make sure at top of file you have:
+// import Signal from "../models/Signal.js";
+
+export const getTrafficStats = async (req, res) => {
+  try {
+    // Guard: ensure Signal model is present
+    if (!Signal || typeof Signal.find !== "function") {
+      console.warn("Signal model missing or invalid");
+      return res.status(200).json({ totalSignals: 0, online: 0, offline: 0, maintenance: 0 });
+    }
+
+    // Fetch all signals (lean for better perf)
+    const all = await Signal.find().lean().catch((err) => {
+      console.error("Signal.find() failed:", err);
+      return [];
+    });
+
+    const totalSignals = Array.isArray(all) ? all.length : 0;
+    // Normalize status strings (defensive)
+    const normalize = (s) => (String(s || "").trim().toLowerCase());
+    const online = Array.isArray(all) ? all.filter((s) => normalize(s.status) === "active" || normalize(s.status) === "online").length : 0;
+    const offline = Array.isArray(all) ? all.filter((s) => normalize(s.status) === "offline").length : 0;
+    const maintenance = Array.isArray(all) ? all.filter((s) => normalize(s.status) === "maintenance").length : 0;
+
+    // Return a clean JSON shape the frontend expects
+    return res.status(200).json({ totalSignals, online, offline, maintenance });
+  } catch (err) {
+    console.error("getTrafficStats error:", err);
+    // return safe defaults so frontend doesn't break
+    return res.status(200).json({ totalSignals: 0, online: 0, offline: 0, maintenance: 0 });
+  }
+};
+
+
 /* ---------------- UPDATE SIGNAL STATUS ---------------- */
 export const updateSignalStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;

@@ -45,14 +45,14 @@ connectDB();
 import authRoutes from "./routes/authRoutes.js";
 import ambulanceRoutes from "./routes/ambulanceRoutes.js";
 import signalRoutes from "./routes/signalRoutes.js";
-// import violationRoutes from "./routes/violationRoutes.js";
-// import challanRoutes from "./routes/challanRoutes.js";
+import violationRoutes from "./routes/violationRoutes.js";
+import challanRoutes from "./routes/challanRoutes.js";
 
 app.use("/api/auth", authRoutes);
 app.use("/api/ambulances", ambulanceRoutes);
 app.use("/api/signal", signalRoutes);
-// app.use("/api/violation", violationRoutes);
-// app.use("/api/challan", challanRoutes);
+app.use("/api/violation", violationRoutes);
+app.use("/api/challan", challanRoutes);
 
 // Test Route
 app.get("/", (req, res) => res.send("API is running"));

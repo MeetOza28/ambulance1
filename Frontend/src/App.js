@@ -11,6 +11,7 @@ import Signup from './components/Signup';
 import PublicRoute from './components/PublicRoute';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
+import MapView from './components/MapView';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
         <Route path="/reset-password/:id/:token" element={<PublicRoute><ResetPassword /></PublicRoute>} />
         <Route path="/ambulance-tracker" element={<ProtectedRoute><AmbulanceTraker /></ProtectedRoute>} />
+        <Route path="/map-view/:id" element={<MapView />} />
         <Route path="/traffic-signal" element={<ProtectedRoute><TrafficSignal /></ProtectedRoute>} />
         <Route path="/helmet-violation" element={<ProtectedRoute><HelmetViolation /></ProtectedRoute>} />
         <Route path="/challan-history" element={<ProtectedRoute><ChallanHistory /></ProtectedRoute>} />

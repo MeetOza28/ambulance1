@@ -15,12 +15,14 @@ import {
     bulkUpdateSignals,
     bulkResetTimers,
     filterByStatus,
-    filterByFlow
+    filterByFlow,
+    getTrafficStats
 } from "../controllers/signalController.js";
 
 const router = express.Router();
 
 router.get("/", listSignals);
+router.get('/stats', getTrafficStats);
 router.post("/add", addSignal);
 router.delete("/:id", deleteSignal);
 router.get("/report", generateReport);
