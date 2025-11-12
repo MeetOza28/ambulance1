@@ -78,3 +78,33 @@
 //   const list = await Challan.find(q).populate("violationId").populate("userId").sort({ issuedAt: -1 });
 //   res.json(list);
 // });
+
+
+// controllers/challanController.js
+import Challan from '../models/Challan.js'; // adjust path to your model
+
+export const getChallanStats = async (req, res) => {
+  try {
+    // total challans & revenue collected
+    const all = await Challan.find();
+    const totalChallans = Array.isArray(all) ? all.length : 0;
+
+    // revenue — if challan has field `amount` and `status` could be 'Paid'/'Pending'
+    let revenueCollected = 0;
+    all.forEach(c => {
+      if (c.status && String(c.status).toLowerCase() === 'paid') {
+        const raw = c.amount ?? c.fineAmount ?? 0;
+        const n = Number(String(raw).replace(/[^\d.-]/g, '')) || 0;
+        revenueCollected += n;
+      }
+    });
+
+    res.status(200).json({
+      totalChallans,
+      revenue: revenueCollected
+    });
+  } catch (err) {
+    console.error('getChallanStats error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};

@@ -3,11 +3,250 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import '../styles/Dashboard.css';
 
+// import the services
+import { getStats as getAmbulanceStats } from '../services/ambulanceServices';
+import { getTrafficStats } from '../services/trafficServices';
+import { getHelmetStats } from '../services/helmetServices';
+import { getChallanStats } from '../services/challanServices';
+
 const Dashboard = () => {
     const navigate = useNavigate();
     const [currentTime, setCurrentTime] = useState(new Date());
     const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+
+// NEW state for stats
+  const [stats, setStats] = useState({
+    ambulances: null,
+    trafficSignals: null,
+    violations: null,
+    revenue: null,
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(null);
+
+  // format INR
+  const fmtINR = (n) => {
+    try {
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+    } catch {
+      return `₹${Number(n || 0).toLocaleString()}`;
+    }
+  };
+
+  // inside Dashboard.jsx - replace the fetchAllStats function with this
+
+// const fetchAllStats = async () => {
+//   setStatsLoading(true);
+//   setStatsError(null);
+//   try {
+//     // call shallow counts for speed
+//     const [
+//       ambRes,
+//       trafficRes,
+//       helmetRes,
+//       challanRes
+//     ] = await Promise.allSettled([
+//       getAmbulanceStats({ shallow: true }),   // returns { data: { totalActive: N, ... } }
+//       getTrafficStats({ shallow: true }),     // returns { data: { totalSignals: N, ... } }
+//       getHelmetStats?.() ?? Promise.resolve({ data: { totalViolations: 0 } }), // keep existing
+//       getChallanStats?.() ?? Promise.resolve({ data: { revenue: 0 } })
+//     ]);
+
+//     const next = { ambulances: null, trafficSignals: null, violations: null, revenue: null };
+
+//     if (ambRes.status === 'fulfilled') {
+//       const data = ambRes.value?.data || ambRes.value || {};
+//       // try common keys
+//       next.ambulances = data?.totalActive ?? data?.total ?? data?.count ?? null;
+//     } else {
+//       console.warn('Amb stats failed', ambRes.reason);
+//       next.ambulances = null;
+//     }
+
+//     if (trafficRes.status === 'fulfilled') {
+//       const data = trafficRes.value?.data || trafficRes.value || {};
+//       next.trafficSignals = data?.totalSignals ?? data?.total ?? data?.count ?? null;
+//     } else {
+//       console.warn('Traffic stats failed', trafficRes.reason);
+//       next.trafficSignals = null;
+//     }
+
+//     if (helmetRes.status === 'fulfilled') {
+//       const data = helmetRes.value?.data || helmetRes.value || {};
+//       next.violations = data?.totalViolations ?? data?.count ?? data?.total ?? null;
+//     } else {
+//       console.warn('Helmet stats failed', helmetRes.reason);
+//       next.violations = null;
+//     }
+
+//     if (challanRes.status === 'fulfilled') {
+//   const data = challanRes.value?.data || challanRes.value || {};
+//   const revenueRaw = data?.revenue ?? data?.totalRevenue ?? data?.totalFine ?? data?.revenueCollected ?? null;
+//   next.revenue = typeof revenueRaw === 'number' ? revenueRaw : (revenueRaw ? Number(String(revenueRaw).replace(/[^\d.-]/g, '')) : null);
+// } else if (helmetRes.status === 'fulfilled') {
+//   const data = helmetRes.value?.data || helmetRes.value || {};
+//   const revenueRaw = data?.revenue ?? data?.totalFine ?? data?.totalRevenue ?? null;
+//   next.revenue = typeof revenueRaw === 'number' ? revenueRaw : (revenueRaw ? Number(String(revenueRaw).replace(/[^\d.-]/g, '')) : null);
+// } else {
+//   console.warn('Revenue lookup failed (no challan & no helmet revenue)');
+//   next.revenue = null;
+// }
+
+
+
+//     setStats(next);
+//   } catch (err) {
+//     console.error('Failed to fetch stats', err);
+//     setStatsError(err.message || 'Failed to load stats');
+//   } finally {
+//     setStatsLoading(false);
+//   }
+// };
+
+// replace your fetchAllStats with this in Dashboard.jsx
+const fetchAllStats = async () => {
+  setStatsLoading(true);
+  setStatsError(null);
+
+  try {
+    // 1) quickly call ambulance & traffic in parallel (these are small)
+    const [ambRes, trafficRes] = await Promise.allSettled([
+      getAmbulanceStats({ shallow: true }),
+      getTrafficStats({ shallow: true })
+    ]);
+
+    // 2) call helmet stats standalone so we can inspect it easily
+    let helmetResult;
+    try {
+      helmetResult = await getHelmetStats();
+      console.log('[DEBUG] getHelmetStats() returned ->', helmetResult);
+      // expect shape: { data: { totalViolations, revenue, ... } }
+    } catch (e) {
+      console.warn('[DEBUG] getHelmetStats() threw', e);
+      helmetResult = null;
+    }
+
+    // 3) try challan stats too (optional)
+    let challanResult;
+    try {
+      challanResult = await getChallanStats?.();
+      console.log('[DEBUG] getChallanStats() returned ->', challanResult);
+    } catch (e) {
+      console.warn('[DEBUG] getChallanStats() threw', e);
+      challanResult = null;
+    }
+
+    // prepare next
+    const next = { ambulances: null, trafficSignals: null, violations: null, revenue: null };
+
+    // ambulances
+    if (ambRes?.status === 'fulfilled') {
+      const d = ambRes.value?.data || ambRes.value || {};
+      next.ambulances = d?.totalActive ?? d?.total ?? d?.count ?? null;
+    }
+
+    // traffic
+    if (trafficRes?.status === 'fulfilled') {
+      const d = trafficRes.value?.data || trafficRes.value || {};
+      next.trafficSignals = d?.totalSignals ?? d?.total ?? d?.count ?? null;
+    }
+
+    // helmet violations count (from helmetResult if present)
+    if (helmetResult && (helmetResult.data || helmetResult.totalViolations != null || helmetResult.total != null)) {
+      const d = helmetResult.data || helmetResult;
+      next.violations = d?.totalViolations ?? d?.count ?? d?.total ?? null;
+    }
+
+    // Try revenue resolution order:
+    // 1) challanResult.data.revenue (if present)
+    // 2) helmetResult.data.revenue (if present)
+    // 3) fallback: fetch /api/violations and sum known fields including fine_amount (snake_case)
+    const safeNumber = (v) => {
+      if (v == null) return 0;
+      if (typeof v === 'number') return v;
+      const n = Number(String(v).replace(/[^\d.-]/g, ''));
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    const extractRevenueFrom = (obj) => {
+      if (!obj) return null;
+      const d = obj.data ?? obj;
+      const cand =
+        d?.revenue ??
+        d?.totalRevenue ??
+        d?.totalFine ??
+        d?.revenueCollected ??
+        d?.fineTotal ??
+        d?.fine_amount ?? // snake_case
+        d?.total ?? null;
+      return cand != null ? safeNumber(cand) : null;
+    };
+
+    // 1) challan
+    const challanRev = extractRevenueFrom(challanResult);
+    if (challanRev != null && challanRev !== 0) {
+      next.revenue = challanRev;
+    } else {
+      // 2) helmetResult
+      const helmetRev = extractRevenueFrom(helmetResult);
+      if (helmetRev != null && helmetRev !== 0) {
+        next.revenue = helmetRev;
+      } else {
+        // 3) fallback: fetch violations and sum (explicitly include snake_case fine_amount)
+        try {
+          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+          const headers = { 'Content-Type': 'application/json' };
+          if (token) headers.Authorization = `Bearer ${token}`;
+
+          const res = await fetch('http://localhost:5001/api/violations', { headers });
+          if (res.ok) {
+            const json = await res.json().catch(() => null);
+            const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : (json?.violations || []));
+            // debug
+            console.log('[DEBUG] /api/violations list length', list.length, 'sample[0]:', list[0]);
+            let sum = 0;
+            for (const it of list) {
+              const raw =
+                it?.fine_amount ?? // snake_case from DB screenshot
+                it?.fineAmount ??
+                it?.fine ??
+                it?.amount ??
+                it?.totalFine ??
+                0;
+              sum += safeNumber(raw);
+            }
+            next.revenue = sum;
+          } else {
+            console.warn('[DEBUG] fallback /api/violations returned not ok', res.status);
+            next.revenue = null;
+          }
+        } catch (e) {
+          console.error('[DEBUG] fallback summing failed', e);
+          next.revenue = null;
+        }
+      }
+    }
+
+    // Finally set stats
+    setStats(next);
+  } catch (err) {
+    console.error('Failed to fetch stats', err);
+    setStatsError(err.message || 'Failed to load stats');
+  } finally {
+    setStatsLoading(false);
+  }
+};
+
+
+  useEffect(() => {
+    fetchAllStats();
+    const interval = setInterval(fetchAllStats, 15 * 1000); // refresh every 15s
+    return () => clearInterval(interval);
+  }, []);
+
+
     useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -175,10 +414,10 @@ const Dashboard = () => {
             <span className="nav-icon">🛡️</span>
             <span>Helmet Violations</span>
           </div>
-          <div className="nav-item" onClick={() => navigate('/challan-history') }>
+          {/* <div className="nav-item" onClick={() => navigate('/challan-history') }>
             <span className="nav-icon">📄</span>
             <span>Challan History</span>
-          </div>
+          </div> */}
         </nav>
         
         <div className="sidebar-footer">
@@ -224,7 +463,10 @@ const Dashboard = () => {
             <div className="stat-content">
                 <div>
                     <h3 className="stat-label">Active Ambulances</h3>
-                    <div className="stat-number">12</div>
+                    {/* <div className="stat-number">12</div> */}
+                    <div className="stat-number">
+                      {statsLoading && stats.ambulances === null ? '—' : (stats.ambulances ?? '0')}
+                    </div>
                 </div>
             </div>
             <div className="stat-icon">📍</div>
@@ -234,7 +476,10 @@ const Dashboard = () => {
             <div className="stat-content">
                 <div>
               <h3 className="stat-label">Traffic Signals</h3>
-              <div className="stat-number">45</div>
+              {/* <div className="stat-number">45</div> */}
+              <div className="stat-number">
+                    {statsLoading && stats.trafficSignals === null ? '—' : (stats.trafficSignals ?? '0')}
+                  </div>
               </div>
             </div>
             <div className="stat-icon">⚡</div>
@@ -243,8 +488,11 @@ const Dashboard = () => {
           <div className="stat-card red">
             <div className="stat-content">
                 <div>
-              <h3 className="stat-label">Violations Today</h3>
-              <div className="stat-number">117</div>
+              <h3 className="stat-label">Total Violations</h3>
+              {/* <div className="stat-number">117</div> */}
+              <div className="stat-number">
+                    {statsLoading && stats.violations === null ? '—' : (stats.violations ?? '0')}
+                  </div>
               </div>
             </div>
             <div className="stat-icon">⚠️</div>
@@ -253,8 +501,13 @@ const Dashboard = () => {
           <div className="stat-card purple">
             <div className="stat-content">
                 <div>
-              <h3 className="stat-label">Revenue Today</h3>
-              <div className="stat-number">₹25,400</div>
+              <h3 className="stat-label">Revenue</h3>
+              {/* <div className="stat-number">₹25,400</div> */}
+              <div className="stat-number">
+  {statsLoading && stats.revenue === null ? '—' : (typeof stats.revenue === 'number' ? fmtINR(stats.revenue) : (stats.revenue ? fmtINR(Number(stats.revenue)) : '₹0'))}
+</div>
+
+
               </div>
             </div>
             <div className="stat-icon">📊</div>

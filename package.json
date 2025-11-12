@@ -15,5 +15,8 @@
     "url": "https://github.com/MeetOza28/ambulance1/issues"
   },
   "homepage": "https://github.com/MeetOza28/ambulance1#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "@react-google-maps/api": "^2.20.7"
+  }
 }

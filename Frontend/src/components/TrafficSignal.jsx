@@ -22,7 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import '../styles/TrafficSignal.css';
 import { useRef } from 'react'; 
 import { db } from "../firebaseConfig";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, set } from "firebase/database";
 import { update } from "firebase/database";
 import Swal from "sweetalert2";
 
@@ -48,62 +48,330 @@ const TrafficSignals = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // add near other useState declarations
+const [localTimers, setLocalTimers] = useState({}); // { [signalId]: seconds }
+const prevLightsRef = useRef({}); // track previous light per-signal to detect transitions
+
+// cycle timing defaults (change if you want different timings)
+const GREEN_DUR = 20;
+const YELLOW_DUR = 7;
+const FULL_PHASE = GREEN_DUR + YELLOW_DUR;
+
+// helpers for cycle math
+const getActiveOrder = () => {
+  // preserve UI order (signals array order) and only keep active signals
+  return signals
+    .filter(s => s.status === 'Active')
+    .map(s => ({ id: String(s.id ?? s.key), raw: s }));
+};
+
+const findCurrentIndex = (ordered) => {
+  // prefer a green signal; if none, prefer yellow
+  for (let i = 0; i < ordered.length; i++) {
+    const v = ordered[i].raw;
+    const light = v.currentLight;
+    if (light === 'green') return i;
+  }
+  for (let i = 0; i < ordered.length; i++) {
+    const v = ordered[i].raw;
+    const light = v.currentLight;
+    if (light === 'yellow') return i;
+  }
+  return -1; // no running phase found
+};
+
+// const computeRedRemaining = (signalId) => {
+//   const ordered = getActiveOrder();
+//   if (!ordered || ordered.length === 0) return null;
+//   const n = ordered.length;
+//   const idxMap = ordered.map(o => o.id);
+//   const targetIdx = idxMap.indexOf(String(signalId));
+//   if (targetIdx === -1) return null;
+
+//   const curIdx = findCurrentIndex(ordered);
+//   if (curIdx === -1) {
+//     // no known running signal — fallback to showing full rotation length until this signal's turn
+//     // for a cycle of n signals, rotation = n * FULL_PHASE
+//     // compute distance from 0 (assume starting at ordered[0])
+//     const dist = (targetIdx + n - 0) % n;
+//     return dist * FULL_PHASE;
+//   }
+
+//   // if target is the currently running one (shouldn't be red) return null
+//   if (targetIdx === curIdx) {
+//     return null;
+//   }
+
+//   // distance (how many steps ahead until it becomes green)
+//   const distance = (targetIdx + n - curIdx) % n;
+
+//   // sum remaining of the current running phase (first step)
+//   let remaining = 0;
+
+//   const curId = ordered[curIdx].id;
+//   const curTimer = localTimers[curId];
+
+//   if (typeof curTimer === 'number') {
+//     remaining += curTimer;
+//   } else {
+//     // if we don't have a per-signal remaining, assume full phase
+//     remaining += FULL_PHASE;
+//   }
+
+//   // for intermediate steps (1 .. distance-1) add full phase durations
+//   // note: we do NOT include the target's own green here; the time returned is time until it becomes green
+//   for (let k = 1; k < distance; k++) {
+//     const idx = (curIdx + k) % n;
+//     const midId = ordered[idx].id;
+//     // If a mid signal currently has its own running timer (rare), use it; otherwise full phase
+//     const midTimer = localTimers[midId];
+//     if (typeof midTimer === 'number') {
+//       // if that mid signal is actually green/yellow then its remaining is already correct
+//       remaining += midTimer;
+//     } else {
+//       remaining += FULL_PHASE;
+//     }
+//   }
+
+//   return remaining;
+// };
+
+const computeRedRemaining = (signalId) => {
+  const ordered = getActiveOrder();
+  if (!ordered || ordered.length === 0) return null;
+  const n = ordered.length;
+  const idxMap = ordered.map(o => o.id);
+  const targetIdx = idxMap.indexOf(String(signalId));
+  if (targetIdx === -1) return null;
+
+  const curIdx = findCurrentIndex(ordered);
+  if (curIdx === -1) {
+    // no known running signal — fallback: estimate by assuming rotation starts at idx 0
+    const dist = (targetIdx + n - 0) % n;
+    return dist * FULL_PHASE;
+  }
+
+  // if target is the currently running one -> it's not red (return null)
+  if (targetIdx === curIdx) return null;
+
+  // compute remaining *full phase* length for the currently running signal:
+  // - if current is green: remaining full-phase = remaining green (localTimers) + YELLOW_DUR
+  // - if current is yellow: remaining full-phase = remaining yellow (localTimers)
+  // - otherwise fallback to FULL_PHASE
+  const curId = ordered[curIdx].id;
+  const curRaw = ordered[curIdx].raw;
+  const curLight = curRaw.currentLight;
+  const curTimerLocal = localTimers[curId];
+
+  let remainingFullForCurrent;
+  if (curLight === 'green') {
+    const remainingGreen = (typeof curTimerLocal === 'number') ? curTimerLocal : (typeof curRaw.timer === 'number' ? curRaw.timer : GREEN_DUR);
+    remainingFullForCurrent = remainingGreen + YELLOW_DUR;
+  } else if (curLight === 'yellow') {
+    remainingFullForCurrent = (typeof curTimerLocal === 'number') ? curTimerLocal : (typeof curRaw.timer === 'number' ? curRaw.timer : YELLOW_DUR);
+  } else {
+    // defensive fallback
+    remainingFullForCurrent = FULL_PHASE;
+  }
+
+  // distance (how many steps ahead until it becomes green)
+  const distance = (targetIdx + n - curIdx) % n; // >=1 because targetIdx !== curIdx
+
+  // Time until target becomes green:
+  // remainingFullForCurrent (finish current's remaining full-phase)
+  // + (distance - 1) * FULL_PHASE  (full phases of intermediate signals)
+  const timeUntilGreen = remainingFullForCurrent + (Math.max(0, distance - 1) * FULL_PHASE);
+
+  return timeUntilGreen;
+};
+
+
   // read-only flag (hardware controls state)
   const READ_ONLY = false;
 
-  // ---- Realtime read-only listener
-  useEffect(() => {
-    const trafficRef = ref(db, "TrafficSignals");
+// initialize local timers from currentLights and reset on transitions.
+// Use stable id: s.id || s.key
+// useEffect(() => {
+//   // inside your onValue callback, after building signalArray and before setSignals(signalArray)
+// // setSignals(signalArray);
 
-    const unsubscribe = onValue(
-      trafficRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const signalArray = Object.keys(data).map((key) => {
-  const sig = data[key] || {};
-  const currentLights = sig.currentLights || { red: false, yellow: false, green: false };
-  const currentLight  = sig.currentLight || inferCurrentLight(currentLights);
+// // --- NEW: initialize / reset local timers immediately from fresh DB snapshot ---
+// --- IMPORTANT: initialize localTimers from this fresh DB snapshot ---
+// setLocalTimers(prev => {
+//   const next = { ...prev };
 
-  return {
-    id: sig.id || key,
-    name: sig.name || "",
-    location: sig.location || "Unknown",
-    status: sig.status || "Active",
-    timer: sig.timer ?? 0,
-    currentLights,
-    currentLight,
-    lastUpdated: sig.lastUpdated || "",
+//   signalArray.forEach(s => {
+//     const id = String(s.id ?? s.key); // normalize to string
 
-    powerStatus: sig.powerStatus || "Online",
-    connectivity: sig.connectivity || "Strong",
-    faultStatus: sig.faultStatus || "Normal",
-    emergencyOverride: !!sig.emergencyOverride,
-    trafficFlow: sig.trafficFlow || "Medium",
+//     // determine current light (prefer boolean map)
+//     let currLight = '';
+//     if (s.currentLights && typeof s.currentLights === 'object') {
+//       if (s.currentLights.green) currLight = 'green';
+//       else if (s.currentLights.yellow) currLight = 'yellow';
+//       else if (s.currentLights.red) currLight = 'red';
+//     }
+//     if (!currLight && s.currentLight) {
+//       currLight = String(s.currentLight).toLowerCase().trim();
+//     }
 
-    // ✅ always present for the UI
-    coordinates:
-      (sig.coordinates && typeof sig.coordinates === "object") ? sig.coordinates :
-      (sig.coords && typeof sig.coords === "object") ? sig.coords :
-      { lat: 0, lng: 0 },
-  };
-});
+//     const prevLight = prevLightsRef.current[id];
+
+//     // initialize only when first seen or when light changed in DB
+//     if (prevLight === undefined || prevLight !== currLight) {
+//       // prefer DB-provided timer if available, otherwise fall back to defaults
+//       if (currLight === 'green') {
+//         next[id] = (typeof s.timer === 'number' && s.timer >= 0) ? s.timer : GREEN_DUR;
+//       } else if (currLight === 'yellow') {
+//         next[id] = (typeof s.timer === 'number' && s.timer >= 0) ? s.timer : YELLOW_DUR;
+//       } else {
+//         // red/unknown -> no per-signal countdown stored locally; will compute 'time until green'
+//         next[id] = null;
+//       }
+//     }
+
+//     prevLightsRef.current[id] = currLight;
+//   });
+
+//   return next;
+// });
 
 
-          setSignals(signalArray);
-        } else {
-          setSignals([]);
+// }, [signals]);
+
+
+
+// global ticking interval: decrement numeric local timers every second
+useEffect(() => {
+  const iv = setInterval(() => {
+    setLocalTimers(prev => {
+      const next = { ...prev };
+      let changed = false;
+
+      Object.keys(next).forEach(id => {
+        const v = next[id];
+        if (typeof v === 'number' && v > 0) {
+          next[id] = v - 1;
+          changed = true;
         }
-        setLoading(false);
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-      }
-    );
+        // if v is 0, keep 0 (we show "0s" until hardware flips to next light which will reset to null)
+        // if v is null or undefined, do nothing
+      });
 
-    return () => unsubscribe();
-  }, []);
+      return changed ? next : prev;
+    });
+  }, 1000);
+
+  return () => clearInterval(iv);
+}, []);
+
+
+
+
+
+ // ---- Realtime read-only listener
+useEffect(() => {
+  const trafficRef = ref(db, "TrafficSignals");
+
+  const unsubscribe = onValue(
+    trafficRef,
+    (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const signalArray = Object.keys(data).map((key) => {
+          const sig = data[key] || {};
+          const currentLights = sig.currentLights || { red: false, yellow: false, green: false };
+
+          // prefer boolean map if present
+          let currentLightFromMap = null;
+          if (currentLights.green) currentLightFromMap = 'green';
+          else if (currentLights.yellow) currentLightFromMap = 'yellow';
+          else if (currentLights.red) currentLightFromMap = 'red';
+
+          const currentLight = currentLightFromMap || sig.currentLight || inferCurrentLight(currentLights);
+
+          return {
+            key,
+            id: sig.id || key,
+            name: sig.name || "",
+            location: sig.location || "Unknown",
+            status: sig.status || "Active",
+            timer: sig.timer ?? 0,
+            currentLights,
+            currentLight,
+            lastUpdated: sig.lastUpdated || "",
+            powerStatus: sig.powerStatus || "Online",
+            connectivity: sig.connectivity || "Strong",
+            faultStatus: sig.faultStatus || "Normal",
+            emergencyOverride: !!sig.emergencyOverride,
+            trafficFlow: sig.trafficFlow || "Medium",
+            coordinates:
+              (sig.coordinates && typeof sig.coordinates === "object") ? sig.coordinates :
+              (sig.coords && typeof sig.coords === "object") ? sig.coords :
+              { lat: 0, lng: 0 },
+            _raw: sig
+          };
+        });
+
+        // --- IMPORTANT: initialize localTimers from this fresh DB snapshot ---
+        setLocalTimers(prev => {
+          const next = { ...prev };
+
+          signalArray.forEach(s => {
+            const id = String(s.id ?? s.key); // normalize to string
+
+            // determine current light (prefer boolean map)
+            let currLight = '';
+            if (s.currentLights && typeof s.currentLights === 'object') {
+              if (s.currentLights.green) currLight = 'green';
+              else if (s.currentLights.yellow) currLight = 'yellow';
+              else if (s.currentLights.red) currLight = 'red';
+            }
+            if (!currLight && s.currentLight) {
+              currLight = String(s.currentLight).toLowerCase().trim();
+            }
+
+            const prevLight = prevLightsRef.current[id];
+
+            if (prevLight === undefined || prevLight !== currLight) {
+              if (currLight === 'green') next[id] = 20;
+              else if (currLight === 'yellow') next[id] = 7;
+              else next[id] = null; // red/unknown -> show '--'
+            }
+
+            prevLightsRef.current[id] = currLight;
+          });
+
+          return next;
+        });
+
+        setSignals(signalArray);
+
+        // Refresh currently-open signal so modal shows latest DB state
+        setSelectedSignal(prev => {
+          if (!prev) return prev;
+          const fresh = signalArray.find(s => s.id === prev.id) || signalArray.find(s => s.key === prev.key);
+          return fresh || prev;
+        });
+      } else {
+        setSignals([]);
+        setSelectedSignal(null);
+        // reset timers when DB is empty
+        setLocalTimers({});
+        prevLightsRef.current = {};
+      }
+      setLoading(false);
+    },
+    (err) => {
+      setError(err.message);
+      setLoading(false);
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
+
+useEffect(()=>{ console.debug('localTimers', localTimers); }, [localTimers]);
+
 
  // --- END OF NEW LOGIC ---
 
@@ -855,6 +1123,7 @@ const handleGenerateReport = async () => {
 
 
 
+
  // --- Send manual override command to Firebase ---
 // --- Send manual override command to Firebase ---
 const handleOverrideSignal = async (signalId) => {
@@ -1018,23 +1287,23 @@ const handleResetSignal = async (signalId) => {
   });
   if (!result.isConfirmed) return;
 
-  // show "auto" immediately in the UI (safe default: RED, 0s)
+  // safe default for UI while waiting
   const lights = { red: true, yellow: false, green: false };
 
   try {
+    // 1) set top-level fields (mode, emergency flag etc.)
     await update(ref(db, `TrafficSignals/${signalId}`), {
       mode: "auto",
-      manualCommand: null,               // removes manualCommand in RTDB
-      autoRequestedAt: Date.now(),      // for device to detect the switch
-
-      // ---- UI fields so the card updates instantly
+      autoRequestedAt: Date.now(),
       currentLight: "red",
       currentLights: lights,
       timer: 0,
       lastUpdated: new Date().toISOString(),
-      // optional: turn off any emergency flag your UI might show
-      // emergencyOverride: false,
+      emergencyOverride: false
     });
+
+    // 2) explicitly remove manualCommand (reliable delete)
+    await set(ref(db, `TrafficSignals/${signalId}/manualCommand`), null);
 
     Swal.fire({
       icon: "success",
@@ -1044,7 +1313,7 @@ const handleResetSignal = async (signalId) => {
       showConfirmButton: false
     });
   } catch (err) {
-    console.error(err);
+    console.error('Reset failed:', err);
     Swal.fire({
       icon: "error",
       title: "Reset failed",
@@ -1147,10 +1416,10 @@ const handleResetSignal = async (signalId) => {
                       <span className="nav-icon">🛡️</span>
                       <span>Helmet Violations</span>
                     </div>
-                    <div className="nav-item" onClick={() => navigate('/challan-history') }>
+                    {/* <div className="nav-item" onClick={() => navigate('/challan-history') }>
                       <span className="nav-icon">📄</span>
                       <span>Challan History</span>
-                    </div>
+                    </div> */}
                   </nav>
 
         <div className="sidebar-footer">
@@ -1275,11 +1544,55 @@ const handleResetSignal = async (signalId) => {
                   <div className="info-item">
                     <div className="info-label">Current Timer</div>
                     <div className="info-value">
-                      {signal.status === 'Active' ? (
+                      {/* {signal.status === 'Active' ? (
                         <span className="timer-display">{signal.timer}s</span>
                       ) : (
                         <span>--</span>
-                      )}
+                      )} */}
+  {/* {signal.status === 'Active' ? (
+  <span className="timer-display">
+    { (() => {
+        const v = localTimers[String(signal.id ?? signal.key)];
+
+        if (typeof v === 'number') return `${v}s`;   // show numeric countdown (including 0s)
+        if (v === null) return '--';                 // explicit "no countdown"
+        return '--';                                 // not initialized yet
+      })()
+    }
+  </span>
+) : (
+  <span>--</span>
+)} */}
+
+
+{signal.status === 'Active' ? (
+  <span className="timer-display">
+    { (() => {
+        const id = String(signal.id ?? signal.key);
+        const v = localTimers[id];
+
+        // 1) if we have an explicit running countdown, show it
+        if (typeof v === 'number') return `${v}s`;
+
+        // 2) if this signal is red, compute time until it becomes green in the cycle
+        if (signal.currentLight === 'red') {
+          const redRemaining = computeRedRemaining(id);
+          if (typeof redRemaining === 'number') return `${redRemaining}s`;
+          return '--';
+        }
+
+        // 3) explicit null means "no countdown" -> show --
+        if (v === null) return '--';
+
+        return '--';
+      })()
+    }
+  </span>
+) : (
+  <span>--</span>
+)}
+
+
                     </div>
                   </div>
                   <div className="info-item">

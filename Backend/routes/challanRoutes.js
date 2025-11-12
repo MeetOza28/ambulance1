@@ -9,3 +9,14 @@
 // router.get("/", protect, listChallans);
 
 // export default router;
+
+
+// routes/challanRoutes.js
+import express from 'express';
+import { getChallanStats, /* other controllers */ } from '../controllers/challanController.js';
+const router = express.Router();
+
+router.get('/stats', getChallanStats);
+
+// other routes (generate/pay/list)...
+export default router;

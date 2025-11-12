@@ -1,14 +1,28 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
-const violationSchema = new mongoose.Schema({
-  imageUrl: { type: String, required: true },
-  licensePlate: { type: String },
-  signalId: { type: mongoose.Schema.Types.ObjectId, ref: "Signal" },
-  timestamp: { type: Date, default: Date.now },
-  fineAmount: { type: Number, default: 0 },
-  status: { type: String, enum: ["pending", "sent", "paid", "rejected"], default: "pending" },
-  metadata: { type: mongoose.Schema.Types.Mixed }
+const LocationSchema = new mongoose.Schema({
+  name: { type: String },
+  coords: { 
+    lat: { type: Number },
+    lng: { type: Number }
+  }
+}, { _id: false });
+
+const ViolationSchema = new mongoose.Schema({
+  violationId: { type: String, required: true, unique: true }, // e.g. HV001
+  vehicleNumber: { type: String, required: true },
+  // vehicleType: { type: String, enum: ['Motorcycle','Scooter','Car','Truck','Other'], default: 'Motorcycle' },
+  location: LocationSchema,
+  time: { type: Date, required: true },
+  fineAmount: { type: Number, default: 500 },
+  // status: { type: String, enum: ['Pending','Resolved','Under Review','Paid'], default: 'Pending' },
+  // severity: { type: String, enum: ['Low','Medium','High'], default: 'Medium' },
+  imageUrl: { type: String }, // URL to evidence image
+  officerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  challanNumber: { type: String },
+  notes: { type: String },
+}, {
+  timestamps: true
 });
 
-const Violation = mongoose.model("Violation", violationSchema);
-export default Violation;
+module.exports = mongoose.model('Violation', ViolationSchema);
