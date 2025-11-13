@@ -238,32 +238,149 @@ const computeRedRemaining = (signalId) => {
 
 // }, [signals]);
 
-
+// keep a ref mirror for localTimers so interval reads latest synchronously
+const localTimersRef = useRef(localTimers);
+useEffect(() => { localTimersRef.current = localTimers; }, [localTimers]);
 
 // global ticking interval: decrement numeric local timers every second
+// near other refs / state:
+const signalsRef = useRef(signals);
+useEffect(() => { signalsRef.current = signals; }, [signals]);
+
+// toggle whether client will write phase changes back to Firebase.
+// If your field controllers are authoritative, set to false and only use optimistic UI.
+const SYNC_TO_DB = true;
+
+// helper: advance a single signal's phase locally (and optionally write to DB)
+// helper: advance a single signal's phase locally (and optionally write to DB)
+const advancePhaseForSignal = (sigId, curLight) => {
+  // derive ordered from latest ref
+  const ordered = (signalsRef.current || [])
+    .filter(s => s.status === 'Active')
+    .map(s => ({ id: String(s.id ?? s.key), raw: s }));
+
+  const idx = ordered.findIndex(o => o.id === String(sigId));
+  if (idx === -1) return;
+
+  const cur = ordered[idx].raw;
+  const curId = ordered[idx].id;
+
+  // prepare next timers by cloning current ref
+  const next = { ...localTimersRef.current };
+
+  if (curLight === 'green') {
+    // green -> yellow
+    next[curId] = YELLOW_DUR;
+  } else if (curLight === 'yellow') {
+    // yellow -> red
+    next[curId] = null; // red keeps null because we compute red remaining
+  } else {
+    // fallback: ensure null on red
+    next[curId] = null;
+  }
+
+  // if yellow -> red, immediately give next active signal green
+  if (curLight === 'yellow') {
+    const n = ordered.length;
+    if (n > 0) {
+      const nextIdx = (idx + 1) % n;
+      const nextId = ordered[nextIdx].id;
+      next[nextId] = GREEN_DUR;
+    }
+  }
+
+  // write back state + ref together
+  localTimersRef.current = next;
+  setLocalTimers(next);
+
+  // optional DB sync
+  if (SYNC_TO_DB && !READ_ONLY) {
+    const nowIso = new Date().toISOString();
+    const updates = [];
+
+    if (curLight === 'green') {
+      // set this signal to yellow in DB
+      updates.push(update(ref(db, `TrafficSignals/${curId}`), {
+        currentLight: 'yellow',
+        currentLights: { red: false, yellow: true, green: false },
+        timer: YELLOW_DUR,
+        lastUpdated: nowIso
+      }));
+    } else if (curLight === 'yellow') {
+      // set current to red and next to green
+      updates.push(update(ref(db, `TrafficSignals/${curId}`), {
+        currentLight: 'red',
+        currentLights: { red: true, yellow: false, green: false },
+        timer: 0,
+        lastUpdated: nowIso
+      }));
+
+      // find next signal id (again)
+      const n = ordered.length;
+      if (n > 0) {
+        const nextIdx = (idx + 1) % n;
+        const nextId = ordered[nextIdx].id;
+        updates.push(update(ref(db, `TrafficSignals/${nextId}`), {
+          currentLight: 'green',
+          currentLights: { red: false, yellow: false, green: true },
+          timer: GREEN_DUR,
+          lastUpdated: nowIso
+        }));
+      }
+    }
+
+    // fire-and-forget
+    if (updates.length > 0) Promise.all(updates).catch(e => console.warn('Cycle sync failed', e));
+  }
+};
+
+
+
+
+// Replace your existing ticking useEffect with this:
+// single stable ticking interval (runs once)
 useEffect(() => {
   const iv = setInterval(() => {
-    setLocalTimers(prev => {
-      const next = { ...prev };
-      let changed = false;
+    // Step A: decrement numeric timers using the ref (synchronous)
+    const next = { ...localTimersRef.current };
+    let changed = false;
 
-      Object.keys(next).forEach(id => {
-        const v = next[id];
-        if (typeof v === 'number' && v > 0) {
-          next[id] = v - 1;
-          changed = true;
+    Object.keys(next).forEach(id => {
+      const v = next[id];
+      if (typeof v === 'number' && v > 0) {
+        next[id] = v - 1;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      // update state + ref together
+      localTimersRef.current = next;
+      setLocalTimers(next);
+    }
+
+    // Step B: look for timers that reached <= 0 and advance their phases
+    const ordered = (signalsRef.current || [])
+      .filter(s => s.status === 'Active')
+      .map(s => ({ id: String(s.id ?? s.key), raw: s }));
+
+    Object.keys(localTimersRef.current).forEach(id => {
+      const v = localTimersRef.current[id];
+      if (typeof v === 'number' && v <= 0) {
+        // find the latest signal record
+        const sObj = ordered.find(o => o.id === id);
+        const curLight = sObj ? (sObj.raw.currentLight || inferCurrentLight(sObj.raw.currentLights)) : null;
+        if (curLight) {
+          // advance phase for that id (fire-and-forget)
+          // advancePhaseForSignal updates localTimersRef inside it
+          advancePhaseForSignal(id, curLight);
         }
-        // if v is 0, keep 0 (we show "0s" until hardware flips to next light which will reset to null)
-        // if v is null or undefined, do nothing
-      });
-
-      return changed ? next : prev;
+      }
     });
   }, 1000);
 
   return () => clearInterval(iv);
-}, []);
-
+}, []); // run once, uses refs for latest state
 
 
 
@@ -313,36 +430,63 @@ useEffect(() => {
         });
 
         // --- IMPORTANT: initialize localTimers from this fresh DB snapshot ---
-        setLocalTimers(prev => {
-          const next = { ...prev };
+        // inside onValue -> when you already built `signalArray`
+setLocalTimers(prev => {
+  const next = { ...prev };
 
-          signalArray.forEach(s => {
-            const id = String(s.id ?? s.key); // normalize to string
+  signalArray.forEach(s => {
+    const id = String(s.id ?? s.key);
 
-            // determine current light (prefer boolean map)
-            let currLight = '';
-            if (s.currentLights && typeof s.currentLights === 'object') {
-              if (s.currentLights.green) currLight = 'green';
-              else if (s.currentLights.yellow) currLight = 'yellow';
-              else if (s.currentLights.red) currLight = 'red';
-            }
-            if (!currLight && s.currentLight) {
-              currLight = String(s.currentLight).toLowerCase().trim();
-            }
+    // determine current light (prefer boolean map)
+    let currLight = '';
+    if (s.currentLights && typeof s.currentLights === 'object') {
+      if (s.currentLights.green) currLight = 'green';
+      else if (s.currentLights.yellow) currLight = 'yellow';
+      else if (s.currentLights.red) currLight = 'red';
+    }
+    if (!currLight && s.currentLight) {
+      currLight = String(s.currentLight).toLowerCase().trim();
+    }
 
-            const prevLight = prevLightsRef.current[id];
+    const prevLight = prevLightsRef.current[id];
 
-            if (prevLight === undefined || prevLight !== currLight) {
-              if (currLight === 'green') next[id] = 20;
-              else if (currLight === 'yellow') next[id] = 7;
-              else next[id] = null; // red/unknown -> show '--'
-            }
+    // 1) If the light changed (or first time seen), (re)initialize timer appropriately
+    if (prevLight === undefined || prevLight !== currLight) {
+      if (currLight === 'green') {
+        // prefer device-provided timer if available
+        next[id] = (typeof s.timer === 'number' && s.timer >= 0) ? s.timer : GREEN_DUR;
+      } else if (currLight === 'yellow') {
+        next[id] = (typeof s.timer === 'number' && s.timer >= 0) ? s.timer : YELLOW_DUR;
+      } else {
+        // red/unknown -> we don't maintain a decrementing per-signal timer; use null to indicate compute-by-cycle
+        next[id] = null;
+      }
+    } else {
+      // 2) Light hasn't changed. Ensure we *have* a seeded value for green/yellow.
+      // This covers the race-case where prevLightsRef already had value but localTimers lacks it.
+      if ((currLight === 'green' || currLight === 'yellow')) {
+        if (typeof next[id] === 'undefined' || next[id] === null) {
+          // seed from DB timer if available, otherwise default
+          if (typeof s.timer === 'number' && s.timer >= 0) {
+            next[id] = s.timer;
+          } else {
+            next[id] = (currLight === 'green') ? GREEN_DUR : YELLOW_DUR;
+          }
+        }
+      } else {
+        // red -> keep null (we compute red remaining via computeRedRemaining)
+        if (typeof next[id] === 'undefined') next[id] = null;
+      }
+    }
 
-            prevLightsRef.current[id] = currLight;
-          });
+    // update prevLight snapshot
+    prevLightsRef.current[id] = currLight;
+  });
 
-          return next;
-        });
+  return next;
+});
+
+        
 
         setSignals(signalArray);
 
@@ -1565,7 +1709,7 @@ const handleResetSignal = async (signalId) => {
 )} */}
 
 
-{signal.status === 'Active' ? (
+{/* {signal.status === 'Active' ? (
   <span className="timer-display">
     { (() => {
         const id = String(signal.id ?? signal.key);
@@ -1587,6 +1731,42 @@ const handleResetSignal = async (signalId) => {
         return '--';
       })()
     }
+  </span>
+) : (
+  <span>--</span>
+)} */}
+
+
+{signal.status === 'Active' ? (
+  <span className="timer-display">
+    {(() => {
+      const id = String(signal.id ?? signal.key);
+      const v = localTimers[id];
+
+      // 1) if we have an explicit running countdown, show it
+      if (typeof v === 'number') return `${v}s`;
+
+      // 2) fallback: if device wrote a timer value into DB, use it (green/yellow)
+      if (typeof signal.timer === 'number' && signal.timer >= 0) {
+        // show DB timer for running green/yellow
+        if (signal.currentLight === 'green' || signal.currentLight === 'yellow') {
+          return `${signal.timer}s`;
+        }
+      }
+
+      // 3) if this signal is red, compute time until it becomes green in the cycle
+      if (signal.currentLight === 'red') {
+        const redRemaining = computeRedRemaining(id);
+        if (typeof redRemaining === 'number') return `${redRemaining}s`;
+        return '--';
+      }
+
+      // 4) last resort: estimate from defaults for green/yellow
+      if (signal.currentLight === 'green') return `${GREEN_DUR}s`;
+      if (signal.currentLight === 'yellow') return `${YELLOW_DUR}s`;
+
+      return '--';
+    })()}
   </span>
 ) : (
   <span>--</span>
