@@ -238,14 +238,16 @@ useEffect(() => {
 
       // Merge with activeAmbIds state by setting isActive flag
       const merged = arr.map(a => {
-        // ONLY use tag assignment to consider active
-        const isActive = activeAmbIds.has(String(a.ambulanceId));
-        return {
-          ...a,
-          isActive,
-          location: a.location || (a.coordinates?.lat ? `GPS: ${a.coordinates.lat.toFixed(6)}, ${a.coordinates.lng.toFixed(6)}` : 'Location unavailable'),
-        };
-      });
+  const isActive = activeAmbIds.has(String(a.ambulanceId));
+  return {
+    ...a,
+    isActive,
+    // clear patient/caseId when not active so UI won't accidentally show it
+    caseId: isActive ? a.caseId : null,
+    location: a.location || (a.coordinates?.lat ? `GPS: ${a.coordinates.lat.toFixed(6)}, ${a.coordinates.lng.toFixed(6)}` : 'Location unavailable'),
+  };
+});
+
 
       // Compute stats robustly by reading the raw node statuses (safer)
       let emergency = 0, enRoute = 0, available = 0;
@@ -1074,11 +1076,12 @@ const timeAgo = (timestamp) => {
                   </div>
                 </div>
 
-                {ambulance.status !== 'Available' && (
-                  <div className="patient-info">
-                    <p><strong>Patient:</strong> {ambulance.caseId || "N/A"}</p>
-                  </div>
-                )}
+                {ambulance.isActive && ambulance.status && ambulance.status.toLowerCase() !== 'available' && (
+  <div className="patient-info">
+    <p><strong>Patient:</strong> {ambulance.caseId || "N/A"}</p>
+  </div>
+)}
+
               </div>
             ))}
           </div>
